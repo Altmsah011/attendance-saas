@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#234f3a">
+<title>تسجيل الدخول</title>
+<style>
+:root {
+  --ink: #1c1f26;
+  --paper: #f6f4ef;
+  --card: #ffffff;
+  --line: #e3ded2;
+  --moss: #2f6b4f;
+  --moss-dark: #234f3a;
+  --clay: #b5503a;
+  --muted: #6b6657;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+  min-height: 100vh;
+}
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.wrap { width: 100%; max-width: 380px; }
+.brand { text-align: center; margin-bottom: 24px; }
+.brand .title { font-size: 22px; font-weight: 700; color: var(--moss-dark); }
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 28px 22px;
+  box-shadow: 0 1px 2px rgba(28,31,38,0.04);
+}
+.field { margin-bottom: 16px; }
+.field label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; }
+.field input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 15px;
+  background: var(--paper);
+}
+.field input:focus {
+  outline: 2px solid var(--moss);
+  outline-offset: 1px;
+}
+.btn {
+  display: block;
+  width: 100%;
+  padding: 15px;
+  border-radius: 12px;
+  border: none;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  margin-top: 6px;
+  background: var(--moss);
+  color: #fff;
+  transition: opacity 0.15s ease;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.error-msg {
+  background: #fbeae6;
+  color: var(--clay);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: none;
+}
+.error-msg.show { display: block; }
+.spinner {
+  width: 16px; height: 16px;
+  border: 2.5px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="title">تسجيل الدخول</div>
+  </div>
+  <div class="card">
+    <div class="error-msg" id="errorMsg"></div>
+    <form id="loginForm">
+      <div class="field">
+        <label for="email">البريد الإلكتروني</label>
+        <input type="email" id="email" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="password">كلمة المرور</label>
+        <input type="password" id="password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn" id="submitBtn">دخول</button>
+    </form>
+  </div>
+</div>
+
+<script type="module">
+import { auth, db } from './firebase-config.js';
+import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+const form = document.getElementById('loginForm');
+const errorMsg = document.getElementById('errorMsg');
+const submitBtn = document.getElementById('submitBtn');
+
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorMsg.classList.add('show');
+}
+
+function friendlyError(code) {
+  switch (code) {
+    case 'auth/invalid-email': return 'صيغة البريد الإلكتروني غير صحيحة';
+    case 'auth/user-not-found':
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password': return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+    case 'auth/too-many-requests': return 'محاولات كتير غلط، حاول تاني بعد شوية';
+    default: return 'حصل خطأ، حاول تاني';
+  }
+}
+
+// توجيه المستخدم للصفحة المناسبة حسب دوره
+function routeByRole(role) {
+  if (role === 'superadmin') {
+    window.location.href = 'superadmin.html';
+  } else if (role === 'company_admin') {
+    window.location.href = 'admin.html';
+  } else {
+    window.location.href = 'index.html';
+  }
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorMsg.classList.remove('show');
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner"></span> جاري الدخول...';
+
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  try {
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    const userDoc = await getDoc(doc(db, 'users', cred.user.uid));
+
+    if (!userDoc.exists()) {
+      showError('الحساب دخل بنجاح لكن مفيش بيانات مرتبطة بيه، كلم المسؤول');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'دخول';
+      return;
+    }
+
+    routeByRole(userDoc.data().role);
+  } catch (err) {
+    showError(friendlyError(err.code));
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'دخول';
+  }
+});
+</script>
+</body>
+</html>
