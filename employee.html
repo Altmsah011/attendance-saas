@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#234f3a">
+<title>تسجيل الحضور والانصراف</title>
+<style>
+:root {
+  --ink: #1c1f26;
+  --paper: #f6f4ef;
+  --card: #ffffff;
+  --line: #e3ded2;
+  --moss: #2f6b4f;
+  --moss-dark: #234f3a;
+  --clay: #b5503a;
+  --amber: #b8842a;
+  --muted: #6b6657;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+  min-height: 100vh;
+}
+body { display: flex; flex-direction: column; align-items: center; padding: 20px 16px 40px; }
+.wrap { width: 100%; max-width: 420px; }
+.brand { text-align: center; margin-bottom: 18px; }
+.brand .clock {
+  font-size: 15px; font-weight: 600; color: var(--moss-dark);
+  background: var(--card); padding: 6px 14px; border-radius: 20px;
+  display: inline-block; border: 1px solid var(--line);
+}
+.brand .title { font-size: 20px; font-weight: 700; margin-top: 6px; color: var(--moss-dark); }
+.topbar-actions { display: flex; justify-content: center; margin-top: 8px; }
+.btn-logout {
+  background: transparent; border: 1.5px solid var(--clay); color: var(--clay);
+  padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;
+}
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 22px 20px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(28,31,38,0.04);
+}
+.emp-name { font-size: 22px; font-weight: 700; }
+.emp-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.field { margin-bottom: 14px; }
+.field label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; }
+.field input, .field textarea, .field select {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+  font-family: inherit; font-size: 14px; background: var(--paper);
+}
+.field input:focus, .field textarea:focus, .field select:focus {
+  outline: 2px solid var(--moss); outline-offset: 1px;
+}
+.status-row {
+  display: flex; justify-content: space-between; margin-top: 18px; padding-top: 16px;
+  border-top: 1px dashed var(--line);
+}
+.status-item { text-align: center; flex: 1; }
+.status-item .label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.status-item .value { font-size: 17px; font-weight: 700; }
+.status-item .value.empty { color: var(--line); font-weight: 400; }
+.loc-pill {
+  display: flex; align-items: center; gap: 8px; margin-top: 16px; padding: 10px 12px;
+  border-radius: 10px; font-size: 13px; background: #f1f6f3; color: var(--moss-dark);
+}
+.loc-pill.bad { background: #fbf1ee; color: var(--clay); }
+.loc-pill.wait { background: #f4f1ea; color: var(--muted); }
+.loc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--moss); flex-shrink: 0; }
+.loc-pill.bad .loc-dot { background: var(--clay); }
+.loc-pill.wait .loc-dot { animation: pulse 1.2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+.btn {
+  display: block; width: 100%; padding: 16px; border-radius: 12px; border: none;
+  font-size: 17px; font-weight: 700; font-family: inherit; cursor: pointer;
+  margin-top: 14px; transition: transform 0.08s ease, opacity 0.15s ease;
+}
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-in { background: var(--moss); color: #fff; }
+.btn-out { background: var(--clay); color: #fff; }
+.btn-refresh {
+  background: transparent; border: 1.5px solid var(--moss); color: var(--moss);
+  padding: 10px; font-size: 14px; margin-top: 8px;
+}
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.tab {
+  flex: 1; text-align: center; padding: 10px; border-radius: 10px; font-size: 14px;
+  font-weight: 600; color: var(--muted); background: var(--card); border: 1px solid var(--line);
+  cursor: pointer;
+}
+.tab.active { background: var(--moss-dark); color: #fff; border-color: var(--moss-dark); }
+.hidden { display: none !important; }
+.row-2 { display: flex; gap: 10px; }
+.row-2 .field { flex: 1; }
+.leave-item {
+  display: flex; justify-content: space-between; align-items: center; padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.leave-item:last-child { border-bottom: none; }
+.leave-item .type { font-weight: 600; font-size: 14px; }
+.leave-item .dates { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.badge { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+.badge.Pending { background: #f4ecd9; color: var(--amber); }
+.badge.Approved { background: #e7f1ea; color: var(--moss-dark); }
+.badge.Rejected { background: #fbeae6; color: var(--clay); }
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--ink); color: #fff; padding: 13px 20px; border-radius: 10px;
+  font-size: 14px; max-width: 90%; text-align: center; opacity: 0;
+  transition: all 0.25s ease; pointer-events: none; z-index: 999;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.error { background: var(--clay); }
+.toast.success { background: var(--moss-dark); }
+.empty-state { text-align: center; padding: 30px 10px; color: var(--muted); font-size: 14px; }
+.spinner {
+  width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,0.4); border-top-color: #fff;
+  border-radius: 50%; display: inline-block; animation: spin 0.7s linear infinite;
+  vertical-align: middle; margin-left: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.gate { text-align: center; padding: 60px 10px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap" id="gateWrap">
+  <div class="gate" id="gateMsg">جاري التحقق من الحساب...</div>
+</div>
+
+<div class="wrap" id="mainApp" style="display:none;">
+  <div class="brand">
+    <div class="clock" id="liveClock">--:--:--</div>
+    <div class="title" id="companyTitle">—</div>
+    <div class="topbar-actions"><button class="btn-logout" id="btnLogout">خروج</button></div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" id="tabAttendance">الحضور والانصراف</div>
+    <div class="tab" id="tabLeave">الإجازات</div>
+  </div>
+
+  <div id="panelAttendance">
+    <div class="card">
+      <div class="emp-name" id="empName">—</div>
+      <div class="emp-sub" id="empSub">—</div>
+      <div class="status-row">
+        <div class="status-item"><div class="label">الحضور</div><div class="value" id="clockInValue">—</div></div>
+        <div class="status-item"><div class="label">الانصراف</div><div class="value" id="clockOutValue">—</div></div>
+        <div class="status-item"><div class="label">الساعات</div><div class="value" id="totalHoursValue">—</div></div>
+      </div>
+      <div class="loc-pill wait" id="locPill"><span class="loc-dot"></span><span id="locText">جاري تحديد الموقع...</span></div>
+      <div class="field" style="margin-top:14px;">
+        <label for="commentInput">ملاحظة (اختياري)</label>
+        <textarea id="commentInput" rows="2" placeholder="اكتب ملاحظة..."></textarea>
+      </div>
+      <button class="btn btn-in" id="btnClockIn" disabled>تسجيل حضور</button>
+      <button class="btn btn-out hidden" id="btnClockOut" disabled>تسجيل انصراف</button>
+      <button class="btn btn-refresh" id="btnRefresh">↻ تحديث الحالة</button>
+    </div>
+  </div>
+
+  <div id="panelLeave" class="hidden">
+    <div class="card">
+      <div class="field">
+        <label for="leaveType">نوع الإجازة</label>
+        <select id="leaveType">
+          <option value="Annual">سنوية</option>
+          <option value="Sick">مرضية</option>
+          <option value="Emergency">طارئة</option>
+          <option value="Unpaid">بدون مرتب</option>
+          <option value="Official">رسمية / مناسبات</option>
+        </select>
+      </div>
+      <div class="row-2">
+        <div class="field"><label for="leaveStart">من تاريخ</label><input type="date" id="leaveStart"></div>
+        <div class="field"><label for="leaveEnd">إلى تاريخ</label><input type="date" id="leaveEnd"></div>
+      </div>
+      <div class="field">
+        <label for="leaveComment">سبب الإجازة (اختياري)</label>
+        <textarea id="leaveComment" rows="2" placeholder="اكتب السبب..."></textarea>
+      </div>
+      <button class="btn btn-in" id="btnSubmitLeave">إرسال طلب الإجازة</button>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;font-size:15px;margin-bottom:8px;">رصيد الإجازات</div>
+      <div id="balancesBox"></div>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;font-size:15px;margin-bottom:4px;">سجل الطلبات</div>
+      <div id="leaveHistoryBox"><div class="empty-state">جاري التحميل...</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import {
+  auth, db, onAuthStateChanged, signOut,
+  doc, getDoc, setDoc, updateDoc, addDoc, collection, getDocs, query, where, orderBy, serverTimestamp
+} from './firebase-config.js';
+
+const DAILY_STANDARD_HOURS = 8;
+const TIMEZONE = 'Africa/Cairo';
+
+let companyId = null;
+let employeeId = null;
+let companyData = null;
+let employeeData = null;
+let currentLat = null, currentLng = null, locationReady = false;
+let todayClockedIn = false;
+let todayClockedOut = false;
+let todayRecordId = null;
+let todayClockInMs = null;
+
+// ======================== أدوات عامة ========================
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => { t.className = 'toast ' + type; }, 3200);
+}
+
+function showGate(text) {
+  document.getElementById('gateMsg').textContent = text;
+  document.getElementById('gateWrap').style.display = 'block';
+  document.getElementById('mainApp').style.display = 'none';
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = String(str == null ? '' : str);
+  return div.innerHTML;
+}
+
+function todayDateStr() {
+  const now = new Date();
+  return now.toLocaleDateString('en-CA', { timeZone: TIMEZONE }); // yyyy-MM-dd
+}
+
+function formatTimeNow() {
+  return new Date().toLocaleTimeString('ar-EG', {
+    timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit', second: '2-digit'
+  });
+}
+
+function updateClock() {
+  document.getElementById('liveClock').textContent = new Date().toLocaleTimeString('ar-EG', {
+    timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit'
+  });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ======================== حساب المسافة بين نقطتين ========================
+function getDistanceMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function checkWithinAnyBranch(lat, lng) {
+  const branches = (companyData && companyData.branches) || [];
+  if (!branches.length) return { withinRange: null, distance: null, branchName: '' };
+
+  let closest = Infinity, within = false, branchName = '';
+  branches.forEach((b) => {
+    const d = getDistanceMeters(lat, lng, parseFloat(b.lat), parseFloat(b.lng));
+    if (d < closest) { closest = d; branchName = b.name; }
+    if (d <= parseFloat(b.radiusMeters)) { within = true; branchName = b.name; }
+  });
+  return { withinRange: within, distance: Math.round(closest), branchName };
+}
+
+// ======================== حماية الصفحة ========================
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href = 'index.html'; return; }
+
+  try {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (!userDoc.exists() || userDoc.data().role !== 'employee') {
+      showGate('الحساب ده مش حساب موظف، مفيش صلاحية دخول للصفحة دي');
+      setTimeout(() => { window.location.href = 'index.html'; }, 2000);
+      return;
+    }
+
+    companyId = userDoc.data().companyId;
+    employeeId = userDoc.data().employeeId;
+
+    const [companySnap, employeeSnap] = await Promise.all([
+      getDoc(doc(db, 'companies', companyId)),
+      getDoc(doc(db, 'companies', companyId, 'employees', employeeId))
+    ]);
+
+    if (!companySnap.exists() || !employeeSnap.exists()) {
+      showGate('تعذر تحميل بيانات الشركة أو الموظف');
+      return;
+    }
+
+    companyData = companySnap.data();
+    employeeData = employeeSnap.data();
+
+    document.getElementById('companyTitle').textContent = companyData.name || '—';
+    document.getElementById('empName').textContent = employeeData.name || '—';
+    document.getElementById('empSub').textContent = employeeData.status === 'Active' ? 'نشط' : 'غير نشط';
+    renderBalances(employeeData.balances || {});
+
+    document.getElementById('gateWrap').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+
+    await loadTodayStatus();
+    requestLocation();
+  } catch (err) {
+    showGate('حصل خطأ أثناء تحميل البيانات');
+  }
+});
+
+document.getElementById('btnLogout').addEventListener('click', async () => {
+  await signOut(auth);
+  window.location.href = 'index.html';
+});
+
+// ======================== تبديل التابات ========================
+document.getElementById('tabAttendance').addEventListener('click', () => switchTab('attendance'));
+document.getElementById('tabLeave').addEventListener('click', () => switchTab('leave'));
+
+function switchTab(tab) {
+  document.getElementById('tabAttendance').classList.toggle('active', tab === 'attendance');
+  document.getElementById('tabLeave').classList.toggle('active', tab === 'leave');
+  document.getElementById('panelAttendance').classList.toggle('hidden', tab !== 'attendance');
+  document.getElementById('panelLeave').classList.toggle('hidden', tab !== 'leave');
+  if (tab === 'leave') loadLeaveHistory();
+}
+
+// ======================== الموقع ========================
+function requestLocation() {
+  const pill = document.getElementById('locPill');
+  const text = document.getElementById('locText');
+  if (!navigator.geolocation) {
+    pill.className = 'loc-pill bad';
+    text.textContent = 'المتصفح لا يدعم تحديد الموقع';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      currentLat = pos.coords.latitude;
+      currentLng = pos.coords.longitude;
+      locationReady = true;
+      const loc = checkWithinAnyBranch(currentLat, currentLng);
+      if (loc.withinRange === null) {
+        pill.className = 'loc-pill';
+        text.textContent = 'تم تحديد الموقع ✓ (لا يوجد فروع محددة للمقارنة)';
+      } else if (loc.withinRange) {
+        pill.className = 'loc-pill';
+        text.textContent = 'داخل نطاق ' + loc.branchName + ' ✓';
+      } else {
+        pill.className = 'loc-pill bad';
+        text.textContent = 'خارج النطاق (' + loc.distance + 'م من ' + loc.branchName + ')';
+      }
+      updateButtonStates();
+    },
+    (err) => {
+      locationReady = false;
+      pill.className = 'loc-pill bad';
+      text.textContent = err.code === 1 ? 'يجب تفعيل صلاحية الموقع' : 'تعذر تحديد الموقع';
+      updateButtonStates();
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+// ======================== الأزرار ========================
+function updateButtonStates() {
+  const btnIn = document.getElementById('btnClockIn');
+  const btnOut = document.getElementById('btnClockOut');
+
+  btnIn.disabled = !locationReady || todayClockedIn;
+  btnOut.disabled = !locationReady || !todayClockedIn || todayClockedOut;
+
+  if (todayClockedIn && !todayClockedOut) {
+    btnIn.classList.add('hidden');
+    btnOut.classList.remove('hidden');
+  } else if (todayClockedIn && todayClockedOut) {
+    btnIn.classList.add('hidden');
+    btnOut.classList.add('hidden');
+  } else {
+    btnIn.classList.remove('hidden');
+    btnOut.classList.add('hidden');
+  }
+}
+
+// ======================== حالة اليوم ========================
+async function loadTodayStatus() {
+  const dateStr = todayDateStr();
+  const q = query(
+    collection(db, 'companies', companyId, 'attendance'),
+    where('employeeId', '==', employeeId),
+    where('date', '==', dateStr)
+  );
+  const snap = await getDocs(q);
+
+  if (snap.empty) {
+    todayRecordId = null;
+    todayClockedIn = false;
+    todayClockedOut = false;
+    todayClockInMs = null;
+    document.getElementById('clockInValue').innerHTML = '<span class="empty">—</span>';
+    document.getElementById('clockOutValue').innerHTML = '<span class="empty">—</span>';
+    document.getElementById('totalHoursValue').innerHTML = '<span class="empty">—</span>';
+    updateButtonStates();
+    return;
+  }
+
+  const docSnap = snap.docs[0];
+  const data = docSnap.data();
+  todayRecordId = docSnap.id;
+  todayClockInMs = data.clockInMs || null;
+
+  document.getElementById('clockInValue').textContent = data.clockIn || '—';
+  todayClockedIn = !!data.clockIn;
+
+  if (data.clockOut) {
+    document.getElementById('clockOutValue').textContent = data.clockOut;
+    document.getElementById('totalHoursValue').textContent = data.totalHours || '0.00';
+    todayClockedOut = true;
+  } else {
+    document.getElementById('clockOutValue').innerHTML = '<span class="empty">—</span>';
+    document.getElementById('totalHoursValue').innerHTML = '<span class="empty">—</span>';
+    todayClockedOut = false;
+  }
+  updateButtonStates();
+}
+
+document.getElementById('btnRefresh').addEventListener('click', async () => {
+  showToast('جاري تحديث الحالة...', '');
+  await loadTodayStatus();
+  showToast('تم التحديث', 'success');
+});
+
+// ======================== تسجيل حضور ========================
+document.getElementById('btnClockIn').addEventListener('click', async () => {
+  const btn = document.getElementById('btnClockIn');
+  btn.disabled = true;
+  btn.innerHTML = 'جاري التسجيل...<span class="spinner"></span>';
+
+  try {
+    const loc = checkWithinAnyBranch(currentLat, currentLng);
+    const now = Date.now();
+    const timeStr = formatTimeNow();
+    const comment = document.getElementById('commentInput').value.trim();
+
+    await addDoc(collection(db, 'companies', companyId, 'attendance'), {
+      employeeId: employeeId,
+      employeeName: employeeData.name,
+      date: todayDateStr(),
+      clockIn: timeStr,
+      clockOut: '',
+      totalHours: '',
+      overtime: '',
+      clockInMs: now,
+      lat: currentLat,
+      lng: currentLng,
+      withinRange: loc.withinRange,
+      branchName: loc.branchName || '',
+      comment: comment
+    });
+
+    showToast('تم تسجيل الحضور', 'success');
+    if (loc.withinRange === false) showToast('تنبيه: خارج النطاق', 'error');
+    document.getElementById('commentInput').value = '';
+    await loadTodayStatus();
+  } catch (err) {
+    showToast('حصل خطأ، حاول تاني', 'error');
+  }
+
+  btn.innerHTML = 'تسجيل حضور';
+  btn.disabled = false;
+  updateButtonStates();
+});
+
+// ======================== تسجيل انصراف ========================
+document.getElementById('btnClockOut').addEventListener('click', async () => {
+  const btn = document.getElementById('btnClockOut');
+  btn.disabled = true;
+  btn.innerHTML = 'جاري التسجيل...<span class="spinner"></span>';
+
+  try {
+    if (!todayRecordId) throw new Error('لا يوجد حضور اليوم');
+    const now = Date.now();
+    const timeStr = formatTimeNow();
+    const comment = document.getElementById('commentInput').value.trim();
+
+    let total = 0;
+    if (todayClockInMs) {
+      total = (now - todayClockInMs) / (1000 * 60 * 60);
+    }
+    const overtime = total > DAILY_STANDARD_HOURS ? total - DAILY_STANDARD_HOURS : 0;
+
+    const updates = {
+      clockOut: timeStr,
+      totalHours: total.toFixed(2),
+      overtime: overtime.toFixed(2)
+    };
+    if (comment) updates.comment = comment;
+
+    await updateDoc(doc(db, 'companies', companyId, 'attendance', todayRecordId), updates);
+
+    showToast('تم تسجيل الانصراف - ' + total.toFixed(2) + ' ساعة', 'success');
+    document.getElementById('commentInput').value = '';
+    await loadTodayStatus();
+  } catch (err) {
+    showToast('حصل خطأ، حاول تاني', 'error');
+  }
+
+  btn.innerHTML = 'تسجيل انصراف';
+  btn.disabled = false;
+  updateButtonStates();
+});
+
+// ======================== الرصيد ========================
+function renderBalances(bal) {
+  const labels = { annual: 'سنوية', sick: 'مرضية', emergency: 'طارئة', unpaidUsed: 'بدون مرتب (مستخدم)', official: 'رسمية' };
+  let html = '<div class="status-row" style="border-top:none;padding-top:0;flex-wrap:wrap;gap:10px 0;">';
+  for (const k in labels) {
+    html += `<div class="status-item" style="flex:1 1 33%;"><div class="label">${labels[k]}</div><div class="value">${bal[k] != null ? bal[k] : 0}</div></div>`;
+  }
+  html += '</div>';
+  document.getElementById('balancesBox').innerHTML = html;
+}
+
+// ======================== طلب إجازة ========================
+document.getElementById('btnSubmitLeave').addEventListener('click', async () => {
+  const type = document.getElementById('leaveType').value;
+  const start = document.getElementById('leaveStart').value;
+  const end = document.getElementById('leaveEnd').value;
+  const comment = document.getElementById('leaveComment').value.trim();
+
+  if (!start || !end) { showToast('حدد التاريخ', 'error'); return; }
+  if (new Date(end) < new Date(start)) { showToast('تاريخ النهاية قبل البداية', 'error'); return; }
+
+  const days = Math.floor((new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24)) + 1;
+
+  const btn = document.getElementById('btnSubmitLeave');
+  btn.disabled = true;
+  btn.innerHTML = 'جاري الإرسال...<span class="spinner"></span>';
+
+  try {
+    await addDoc(collection(db, 'companies', companyId, 'leaves'), {
+      employeeId: employeeId,
+      employeeName: employeeData.name,
+      type: type,
+      startDate: start,
+      endDate: end,
+      days: days,
+      status: 'Pending',
+      comment: comment,
+      createdAt: serverTimestamp()
+    });
+
+    showToast('تم إرسال طلب الإجازة', 'success');
+    document.getElementById('leaveStart').value = '';
+    document.getElementById('leaveEnd').value = '';
+    document.getElementById('leaveComment').value = '';
+    await loadLeaveHistory();
+  } catch (err) {
+    showToast('حصل خطأ أثناء الإرسال', 'error');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = 'إرسال طلب الإجازة';
+});
+
+// ======================== سجل الإجازات ========================
+async function loadLeaveHistory() {
+  const box = document.getElementById('leaveHistoryBox');
+  box.innerHTML = '<div class="empty-state">جاري التحميل...</div>';
+  try {
+    const q = query(
+      collection(db, 'companies', companyId, 'leaves'),
+      where('employeeId', '==', employeeId),
+      orderBy('createdAt', 'desc')
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) { box.innerHTML = '<div class="empty-state">لا يوجد طلبات سابقة</div>'; return; }
+
+    const typeLabels = { Annual: 'سنوية', Sick: 'مرضية', Emergency: 'طارئة', Unpaid: 'بدون مرتب', Official: 'رسمية' };
+    const statusLabels = { Pending: 'في الانتظار', Approved: 'موافَق عليها', Rejected: 'مرفوضة' };
+
+    let html = '';
+    snap.forEach((docSnap) => {
+      const item = docSnap.data();
+      html += `<div class="leave-item">
+        <div>
+          <div class="type">${typeLabels[item.type] || item.type}</div>
+          <div class="dates">${item.startDate} → ${item.endDate} (${item.days} يوم)</div>
+        </div>
+        <span class="badge ${item.status}">${statusLabels[item.status] || item.status}</span>
+      </div>`;
+    });
+    box.innerHTML = html;
+  } catch (err) {
+    box.innerHTML = '<div class="empty-state">تعذر تحميل السجل</div>';
+  }
+}
+</script>
+</body>
+</html>
