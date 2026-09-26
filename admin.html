@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة أدمن الشركة</title>
+<style>
+:root {
+  --ink: #1c1f26;
+  --paper: #f6f4ef;
+  --card: #ffffff;
+  --line: #e3ded2;
+  --moss: #2f6b4f;
+  --moss-dark: #234f3a;
+  --clay: #b5503a;
+  --amber: #b8842a;
+  --muted: #6b6657;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+  min-height: 100vh;
+}
+body { display: flex; flex-direction: column; align-items: center; padding: 20px 16px 40px; }
+.wrap { width: 100%; max-width: 720px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.topbar h1 { font-size: 19px; color: var(--moss-dark); margin: 0; }
+.topbar .sub { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+.btn-logout {
+  background: transparent; border: 1.5px solid var(--clay); color: var(--clay);
+  padding: 7px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+}
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.tab {
+  flex: 1; text-align: center; padding: 10px; border-radius: 10px; font-size: 14px;
+  font-weight: 600; color: var(--muted); background: var(--card); border: 1px solid var(--line);
+  cursor: pointer; position: relative;
+}
+.tab.active { background: var(--moss-dark); color: #fff; border-color: var(--moss-dark); }
+.tab .count {
+  display: inline-block; background: var(--clay); color: #fff; font-size: 11px;
+  padding: 1px 7px; border-radius: 20px; margin-right: 6px;
+}
+.hidden { display: none !important; }
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(28,31,38,0.04);
+}
+.month-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.month-row label { font-size: 13px; font-weight: 600; }
+.month-row input {
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px;
+  font-family: inherit; font-size: 14px; background: var(--paper);
+}
+.summary-strip {
+  display: flex; justify-content: space-around; text-align: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px; margin-bottom: 16px;
+}
+.summary-strip .item .label { font-size: 11px; color: var(--muted); }
+.summary-strip .item .value { font-size: 18px; font-weight: 700; color: var(--moss-dark); }
+.emp-card { cursor: pointer; }
+.emp-head { display: flex; justify-content: space-between; align-items: center; }
+.emp-head .name { font-weight: 700; font-size: 15px; }
+.emp-head .today { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.emp-stats { display: flex; gap: 18px; text-align: center; }
+.emp-stats .stat .label { font-size: 10px; color: var(--muted); }
+.emp-stats .stat .value { font-size: 15px; font-weight: 700; }
+.emp-stats .stat .value.ot { color: var(--amber); }
+.emp-detail { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 12px; display: none; }
+.emp-detail.open { display: block; }
+table.daily { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.daily th, table.daily td { padding: 7px 4px; text-align: center; border-bottom: 1px solid var(--line); }
+table.daily th { color: var(--muted); font-weight: 600; }
+.badge-range { font-size: 10px; padding: 2px 7px; border-radius: 10px; }
+.badge-range.in { background: #e7f1ea; color: var(--moss-dark); }
+.badge-range.out { background: #fbeae6; color: var(--clay); }
+.leave-item { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 10px; background: var(--card); }
+.leave-item .name { font-weight: 700; font-size: 15px; }
+.leave-item .detail { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.leave-actions { display: flex; gap: 8px; margin-top: 12px; }
+.btn-approve, .btn-reject {
+  flex: 1; padding: 9px; border: none; border-radius: 8px; font-size: 13px;
+  font-weight: 700; cursor: pointer; color: #fff;
+}
+.btn-approve { background: var(--moss); }
+.btn-reject { background: var(--clay); }
+.btn-approve:disabled, .btn-reject:disabled { opacity: 0.5; cursor: not-allowed; }
+.empty-state { text-align: center; padding: 24px 10px; color: var(--muted); font-size: 14px; }
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--ink); color: #fff; padding: 13px 20px; border-radius: 10px;
+  font-size: 14px; max-width: 90%; text-align: center; opacity: 0;
+  transition: all 0.25s ease; pointer-events: none; z-index: 999;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.error { background: var(--clay); }
+.toast.success { background: var(--moss-dark); }
+.gate { text-align: center; padding: 60px 10px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap" id="gateWrap">
+  <div class="gate" id="gateMsg">جاري التحقق من الحساب...</div>
+</div>
+
+<div class="wrap" id="app" style="display:none;">
+  <div class="topbar">
+    <h1 id="companyTitle">لوحة أدمن الشركة</h1>
+    <button class="btn-logout" id="btnLogout">خروج</button>
+  </div>
+  <div class="sub" id="companySub">—</div>
+
+  <div class="tabs">
+    <div class="tab active" id="tabDashboard">لوحة الموظفين</div>
+    <div class="tab" id="tabLeaves">طلبات الإجازة <span class="count hidden" id="pendingCount">0</span></div>
+  </div>
+
+  <div id="panelDashboard">
+    <div class="month-row">
+      <label for="monthPicker">الشهر:</label>
+      <input type="month" id="monthPicker">
+    </div>
+
+    <div class="summary-strip" id="summaryStrip">
+      <div class="item"><div class="label">عدد الموظفين</div><div class="value" id="sumEmployees">—</div></div>
+      <div class="item"><div class="label">إجمالي الساعات</div><div class="value" id="sumHours">—</div></div>
+      <div class="item"><div class="label">إجمالي الأوفر تايم</div><div class="value" id="sumOvertime">—</div></div>
+    </div>
+
+    <div id="employeesList"><div class="empty-state">جاري التحميل...</div></div>
+  </div>
+
+  <div id="panelLeaves" class="hidden">
+    <div id="leavesList"><div class="empty-state">جاري التحميل...</div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import {
+  auth, db, onAuthStateChanged, signOut,
+  doc, getDoc, updateDoc, collection, getDocs, query, where
+} from './firebase-config.js';
+
+let companyId = null;
+let employees = [];      // [{id, name, status, balances}]
+let attendanceByEmp = {}; // { empId: [records for selected month] }
+let pendingLeaves = [];
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => { t.className = 'toast ' + type; }, 3000);
+}
+
+function showGate(text) {
+  document.getElementById('gateMsg').textContent = text;
+  document.getElementById('gateWrap').style.display = 'block';
+  document.getElementById('app').style.display = 'none';
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = String(str == null ? '' : str);
+  return div.innerHTML;
+}
+
+function currentMonthStr() {
+  const now = new Date();
+  return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+}
+
+// ===== حماية الصفحة =====
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href = 'index.html'; return; }
+
+  try {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (!userDoc.exists() || userDoc.data().role !== 'company_admin') {
+      showGate('الحساب ده مش أدمن شركة، مفيش صلاحية دخول للصفحة دي');
+      setTimeout(() => { window.location.href = 'index.html'; }, 2000);
+      return;
+    }
+
+    companyId = userDoc.data().companyId;
+    const companySnap = await getDoc(doc(db, 'companies', companyId));
+    if (!companySnap.exists()) { showGate('تعذر تحميل بيانات الشركة'); return; }
+
+    document.getElementById('companyTitle').textContent = companySnap.data().name || 'لوحة أدمن الشركة';
+    document.getElementById('companySub').textContent = 'إدارة موظفي وإجازات الشركة';
+
+    document.getElementById('gateWrap').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+
+    document.getElementById('monthPicker').value = currentMonthStr();
+
+    await loadEmployees();
+    await loadMonthData();
+    await loadPendingLeaves();
+  } catch (err) {
+    console.error(err);
+    showGate('حصل خطأ أثناء تحميل البيانات');
+  }
+});
+
+document.getElementById('btnLogout').addEventListener('click', async () => {
+  await signOut(auth);
+  window.location.href = 'index.html';
+});
+
+// ===== تبديل التابات =====
+document.getElementById('tabDashboard').addEventListener('click', () => switchTab('dashboard'));
+document.getElementById('tabLeaves').addEventListener('click', () => switchTab('leaves'));
+
+function switchTab(tab) {
+  document.getElementById('tabDashboard').classList.toggle('active', tab === 'dashboard');
+  document.getElementById('tabLeaves').classList.toggle('active', tab === 'leaves');
+  document.getElementById('panelDashboard').classList.toggle('hidden', tab !== 'dashboard');
+  document.getElementById('panelLeaves').classList.toggle('hidden', tab !== 'leaves');
+}
+
+// ===== تحميل الموظفين =====
+async function loadEmployees() {
+  const snap = await getDocs(collection(db, 'companies', companyId, 'employees'));
+  employees = [];
+  snap.forEach((d) => employees.push({ id: d.id, ...d.data() }));
+  document.getElementById('sumEmployees').textContent = employees.length;
+}
+
+// ===== تحميل بيانات الحضور للشهر المختار =====
+document.getElementById('monthPicker').addEventListener('change', loadMonthData);
+
+async function loadMonthData() {
+  const monthVal = document.getElementById('monthPicker').value; // yyyy-MM
+  if (!monthVal) return;
+
+  const listEl = document.getElementById('employeesList');
+  listEl.innerHTML = '<div class="empty-state">جاري التحميل...</div>';
+
+  const startStr = monthVal + '-01';
+  const endStr = monthVal + '-31';
+
+  try {
+    const q = query(
+      collection(db, 'companies', companyId, 'attendance'),
+      where('date', '>=', startStr),
+      where('date', '<=', endStr)
+    );
+    const snap = await getDocs(q);
+
+    attendanceByEmp = {};
+    snap.forEach((d) => {
+      const rec = d.data();
+      if (!attendanceByEmp[rec.employeeId]) attendanceByEmp[rec.employeeId] = [];
+      attendanceByEmp[rec.employeeId].push(rec);
+    });
+
+    // ترتيب سجلات كل موظف بالتاريخ تصاعديًا
+    Object.keys(attendanceByEmp).forEach((empId) => {
+      attendanceByEmp[empId].sort((a, b) => a.date.localeCompare(b.date));
+    });
+
+    renderEmployees();
+  } catch (err) {
+    console.error(err);
+    listEl.innerHTML = '<div class="empty-state">تعذر تحميل بيانات الحضور</div>';
+  }
+}
+
+// ===== عرض قائمة الموظفين مع ملخص كل واحد =====
+function renderEmployees() {
+  const listEl = document.getElementById('employeesList');
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
+
+  if (!employees.length) {
+    listEl.innerHTML = '<div class="empty-state">لا يوجد موظفين مسجلين بعد</div>';
+    document.getElementById('sumHours').textContent = '0.00';
+    document.getElementById('sumOvertime').textContent = '0.00';
+    return;
+  }
+
+  let totalHoursAll = 0;
+  let totalOvertimeAll = 0;
+  let html = '';
+
+  employees.forEach((emp) => {
+    const records = attendanceByEmp[emp.id] || [];
+    let monthHours = 0, monthOvertime = 0, daysPresent = 0;
+    records.forEach((r) => {
+      monthHours += parseFloat(r.totalHours) || 0;
+      monthOvertime += parseFloat(r.overtime) || 0;
+      if (r.clockIn) daysPresent++;
+    });
+    totalHoursAll += monthHours;
+    totalOvertimeAll += monthOvertime;
+
+    const todayRec = records.find((r) => r.date === todayStr);
+    let todayText = 'لم يسجل حضور اليوم';
+    if (todayRec) {
+      todayText = 'حضور: ' + (todayRec.clockIn || '—') + '   انصراف: ' + (todayRec.clockOut || 'لسه مسجلش');
+    }
+
+    let detailRows = '';
+    if (records.length) {
+      records.forEach((r) => {
+        detailRows += `<tr>
+          <td>${r.date}</td>
+          <td>${r.clockIn || '—'}</td>
+          <td>${r.clockOut || '—'}</td>
+          <td>${r.totalHours || '—'}</td>
+          <td>${r.overtime && parseFloat(r.overtime) > 0 ? r.overtime : '—'}</td>
+          <td>${r.withinRange === true ? '<span class="badge-range in">داخل</span>' : r.withinRange === false ? '<span class="badge-range out">خارج</span>' : '—'}</td>
+        </tr>`;
+      });
+    } else {
+      detailRows = '<tr><td colspan="6" style="padding:14px;color:var(--muted);">مفيش سجلات في الشهر ده</td></tr>';
+    }
+
+    html += `<div class="card emp-card" data-emp-id="${emp.id}">
+      <div class="emp-head">
+        <div>
+          <div class="name">${escapeHtml(emp.name)}</div>
+          <div class="today">${todayText}</div>
+        </div>
+        <div class="emp-stats">
+          <div class="stat"><div class="label">أيام حضور</div><div class="value">${daysPresent}</div></div>
+          <div class="stat"><div class="label">إجمالي الساعات</div><div class="value">${monthHours.toFixed(2)}</div></div>
+          <div class="stat"><div class="label">أوفر تايم</div><div class="value ot">${monthOvertime.toFixed(2)}</div></div>
+        </div>
+      </div>
+      <div class="emp-detail" id="detail-${emp.id}">
+        <table class="daily">
+          <thead><tr><th>التاريخ</th><th>حضور</th><th>انصراف</th><th>الساعات</th><th>أوفر</th><th>الموقع</th></tr></thead>
+          <tbody>${detailRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  });
+
+  listEl.innerHTML = html;
+  document.getElementById('sumHours').textContent = totalHoursAll.toFixed(2);
+  document.getElementById('sumOvertime').textContent = totalOvertimeAll.toFixed(2);
+
+  listEl.querySelectorAll('.emp-card').forEach((cardEl) => {
+    cardEl.addEventListener('click', () => {
+      document.getElementById('detail-' + cardEl.dataset.empId).classList.toggle('open');
+    });
+  });
+}
+
+// ===== تحميل طلبات الإجازة المعلقة =====
+async function loadPendingLeaves() {
+  const listEl = document.getElementById('leavesList');
+  listEl.innerHTML = '<div class="empty-state">جاري التحميل...</div>';
+
+  try {
+    const q = query(
+      collection(db, 'companies', companyId, 'leaves'),
+      where('status', '==', 'Pending')
+    );
+    const snap = await getDocs(q);
+
+    pendingLeaves = [];
+    snap.forEach((d) => pendingLeaves.push({ id: d.id, ...d.data() }));
+    pendingLeaves.sort((a, b) => {
+      const ta = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+      const tb = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0;
+      return tb - ta;
+    });
+
+    const countEl = document.getElementById('pendingCount');
+    if (pendingLeaves.length) {
+      countEl.textContent = pendingLeaves.length;
+      countEl.classList.remove('hidden');
+    } else {
+      countEl.classList.add('hidden');
+    }
+
+    renderPendingLeaves();
+  } catch (err) {
+    console.error(err);
+    listEl.innerHTML = '<div class="empty-state">تعذر تحميل طلبات الإجازة</div>';
+  }
+}
+
+const typeLabels = { Annual: 'سنوية', Sick: 'مرضية', Emergency: 'طارئة', Unpaid: 'بدون مرتب', Official: 'رسمية' };
+const balanceFieldMap = { Annual: 'annual', Sick: 'sick', Emergency: 'emergency', Unpaid: 'unpaidUsed', Official: 'official' };
+
+function renderPendingLeaves() {
+  const listEl = document.getElementById('leavesList');
+  if (!pendingLeaves.length) {
+    listEl.innerHTML = '<div class="empty-state">✨ لا توجد طلبات معلقة</div>';
+    return;
+  }
+
+  let html = '';
+  pendingLeaves.forEach((item) => {
+    html += `<div class="leave-item" data-leave-id="${item.id}">
+      <div class="name">${escapeHtml(item.employeeName)}</div>
+      <div class="detail">${typeLabels[item.type] || item.type} | من ${item.startDate} إلى ${item.endDate} (${item.days} يوم)</div>
+      ${item.comment ? `<div class="detail">💬 ${escapeHtml(item.comment)}</div>` : ''}
+      <div class="leave-actions">
+        <button class="btn-approve" data-action="approve">✅ موافقة</button>
+        <button class="btn-reject" data-action="reject">❌ رفض</button>
+      </div>
+    </div>`;
+  });
+  listEl.innerHTML = html;
+
+  listEl.querySelectorAll('.leave-item').forEach((itemEl) => {
+    const leaveId = itemEl.dataset.leaveId;
+    const leave = pendingLeaves.find((l) => l.id === leaveId);
+    itemEl.querySelector('[data-action="approve"]').addEventListener('click', () => handleLeaveAction(leave, 'Approved', itemEl));
+    itemEl.querySelector('[data-action="reject"]').addEventListener('click', () => handleLeaveAction(leave, 'Rejected', itemEl));
+  });
+}
+
+async function handleLeaveAction(leave, newStatus, itemEl) {
+  const confirmMsg = newStatus === 'Approved'
+    ? 'تأكيد الموافقة على إجازة ' + leave.employeeName + '؟'
+    : 'تأكيد رفض إجازة ' + leave.employeeName + '؟';
+  if (!confirm(confirmMsg)) return;
+
+  itemEl.querySelectorAll('button').forEach((b) => b.disabled = true);
+
+  try {
+    await updateDoc(doc(db, 'companies', companyId, 'leaves', leave.id), { status: newStatus });
+
+    if (newStatus === 'Approved') {
+      const empRef = doc(db, 'companies', companyId, 'employees', leave.employeeId);
+      const empSnap = await getDoc(empRef);
+      if (empSnap.exists()) {
+        const balances = empSnap.data().balances || {};
+        const field = balanceFieldMap[leave.type];
+        if (field) {
+          const current = parseFloat(balances[field]) || 0;
+          const updated = leave.type === 'Unpaid' ? current + leave.days : current - leave.days;
+          await updateDoc(empRef, { ['balances.' + field]: updated });
+        }
+      }
+    }
+
+    showToast(newStatus === 'Approved' ? 'تمت الموافقة على الإجازة' : 'تم رفض الإجازة', 'success');
+    await loadPendingLeaves();
+    await loadEmployees();
+  } catch (err) {
+    console.error(err);
+    showToast('حصل خطأ أثناء تنفيذ الإجراء', 'error');
+    itemEl.querySelectorAll('button').forEach((b) => b.disabled = false);
+  }
+}
+</script>
+</body>
+</html>
