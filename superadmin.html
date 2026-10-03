@@ -115,6 +115,41 @@ body { display: flex; flex-direction: column; align-items: center; padding: 20px
   margin-bottom: 10px;
 }
 .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+.item-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.btn-small {
+  background: transparent;
+  border: 1.5px solid var(--moss);
+  color: var(--moss-dark);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-small:disabled { opacity: 0.5; cursor: not-allowed; }
+.company-item, .employee-item { flex-wrap: wrap; gap: 8px; }
+.edit-panel {
+  display: none;
+  width: 100%;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  margin-top: 10px;
+}
+.edit-panel.open { display: block; }
+.edit-panel .field { margin-bottom: 10px; }
+.edit-panel .row-2 { display: flex; gap: 10px; }
+.edit-panel .row-2 .field { flex: 1; }
+.edit-panel-actions { display: flex; gap: 8px; margin-top: 4px; }
+.btn-save {
+  flex: 1; padding: 9px; border: none; border-radius: 8px; font-size: 13px;
+  font-weight: 700; cursor: pointer; color: #fff; background: var(--moss-dark);
+}
+.btn-cancel {
+  flex: 1; padding: 9px; border: 1.5px solid var(--line); border-radius: 8px; font-size: 13px;
+  font-weight: 700; cursor: pointer; color: var(--muted); background: transparent;
+}
 .toast {
   position: fixed;
   bottom: 24px;
@@ -245,6 +280,7 @@ body { display: flex; flex-direction: column; align-items: center; padding: 20px
     </div>
     <button class="btn-secondary" id="btnUseMyLocation">📍 استخدم موقعي الحالي</button>
     <button class="btn" id="btnAddBranch">إضافة الفرع</button>
+    <button class="btn-cancel hidden" id="btnCancelBranchEdit" style="width:100%;margin-top:8px;">إلغاء التعديل</button>
   </div>
 
   <div class="card">
@@ -257,11 +293,12 @@ body { display: flex; flex-direction: column; align-items: center; padding: 20px
 
 <script type="module">
 import {
-  auth, db, onAuthStateChanged, signOut, createEmployeeAuthAccount,
+  auth, db, onAuthStateChanged, signOut, createEmployeeAuthAccount, sendPasswordResetEmail,
   doc, setDoc, getDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, query, orderBy, serverTimestamp
 } from './firebase-config.js';
 
 let companiesCache = [];
+let editingBranchIndex = null;
 
 function showToast(msg, type = '') {
   const t = document.getElementById('toast');
@@ -378,7 +415,10 @@ async function loadCompanies() {
           <div class="date">أُضيفت في ${dateStr}</div>
           <div class="cid">${c.id}</div>
         </div>
-        <button class="btn-delete" data-company-id="${c.id}" data-company-name="${escapeHtml(c.name)}">حذف</button>
+        <div class="item-actions">
+          <button class="btn-small" data-rename-company-id="${c.id}" data-company-name="${escapeHtml(c.name)}">✏️ تعديل الاسم</button>
+          <button class="btn-delete" data-company-id="${c.id}" data-company-name="${escapeHtml(c.name)}">حذف</button>
+        </div>
       </div>`;
       selectHtml += `<option value="${c.id}">${escapeHtml(c.name)}</option>`;
     });
@@ -390,6 +430,11 @@ async function loadCompanies() {
     listEl.querySelectorAll('.btn-delete').forEach((btn) => {
       btn.addEventListener('click', () => {
         deleteCompany(btn.dataset.companyId, btn.dataset.companyName);
+      });
+    });
+    listEl.querySelectorAll('[data-rename-company-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        renameCompany(btn.dataset.renameCompanyId, btn.dataset.companyName);
       });
     });
 
@@ -425,6 +470,22 @@ async function deleteCompany(companyId, companyName) {
   }
 }
 
+// ===== تعديل اسم شركة =====
+async function renameCompany(companyId, currentName) {
+  const newName = prompt('اكتب الاسم الجديد للشركة:', currentName);
+  if (newName === null) return; // المستخدم ألغى
+  const trimmed = newName.trim();
+  if (!trimmed || trimmed === currentName) return;
+
+  try {
+    await updateDoc(doc(db, 'companies', companyId), { name: trimmed });
+    showToast('تم تعديل اسم الشركة', 'success');
+    await loadCompanies();
+  } catch (err) {
+    showToast('حصل خطأ أثناء التعديل', 'error');
+  }
+}
+
 document.getElementById('empCompanySelect').addEventListener('change', (e) => {
   loadEmployees(e.target.value);
 });
@@ -455,6 +516,7 @@ document.getElementById('btnAddEmployee').addEventListener('click', async () => 
 
     await setDoc(doc(db, 'companies', companyId, 'employees', newUid), {
       name: name,
+      email: email,
       status: 'Active',
       balances: {
         annual: balAnnual,
@@ -507,12 +569,40 @@ async function loadEmployees(companyId) {
     let html = '';
     snap.forEach((docSnap) => {
       const data = docSnap.data();
+      const bal = data.balances || {};
       html += `<div class="employee-item">
         <div>
           <div class="name">${escapeHtml(data.name)}</div>
-          <div class="sub">${data.status === 'Active' ? 'نشط' : 'غير نشط'}</div>
+          <div class="sub">${data.status === 'Active' ? 'نشط' : 'غير نشط'}${data.email ? ' — ' + escapeHtml(data.email) : ''}</div>
         </div>
-        <button class="btn-delete" data-emp-id="${docSnap.id}" data-emp-name="${escapeHtml(data.name)}" data-company-id="${companyId}">حذف</button>
+        <div class="item-actions">
+          <button class="btn-small" data-toggle-edit="${docSnap.id}">✏️ تعديل</button>
+          <button class="btn-small" data-reset-pw="${docSnap.id}" data-emp-email="${escapeHtml(data.email || '')}">🔑 باسورد</button>
+          <button class="btn-delete" data-emp-id="${docSnap.id}" data-emp-name="${escapeHtml(data.name)}" data-company-id="${companyId}">حذف</button>
+        </div>
+        <div class="edit-panel" id="editPanel-${docSnap.id}">
+          <div class="field"><label>الاسم</label><input type="text" class="edit-name" value="${escapeHtml(data.name)}"></div>
+          <div class="field">
+            <label>الحالة</label>
+            <select class="edit-status">
+              <option value="Active" ${data.status === 'Active' ? 'selected' : ''}>نشط</option>
+              <option value="Inactive" ${data.status !== 'Active' ? 'selected' : ''}>غير نشط</option>
+            </select>
+          </div>
+          <div class="row-2">
+            <div class="field"><label>سنوية</label><input type="number" class="edit-annual" value="${bal.annual != null ? bal.annual : 0}"></div>
+            <div class="field"><label>مرضية</label><input type="number" class="edit-sick" value="${bal.sick != null ? bal.sick : 0}"></div>
+          </div>
+          <div class="row-2">
+            <div class="field"><label>طارئة</label><input type="number" class="edit-emergency" value="${bal.emergency != null ? bal.emergency : 0}"></div>
+            <div class="field"><label>بدون مرتب (مستخدم)</label><input type="number" class="edit-unpaid" value="${bal.unpaidUsed != null ? bal.unpaidUsed : 0}"></div>
+          </div>
+          <div class="field"><label>رسمية</label><input type="number" class="edit-official" value="${bal.official != null ? bal.official : 0}"></div>
+          <div class="edit-panel-actions">
+            <button class="btn-save" data-save-emp="${docSnap.id}" data-company-id="${companyId}">حفظ</button>
+            <button class="btn-cancel" data-cancel-edit="${docSnap.id}">إلغاء</button>
+          </div>
+        </div>
       </div>`;
     });
     listEl.innerHTML = html;
@@ -522,8 +612,77 @@ async function loadEmployees(companyId) {
         deleteEmployee(btn.dataset.companyId, btn.dataset.empId, btn.dataset.empName);
       });
     });
+    listEl.querySelectorAll('[data-toggle-edit]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.getElementById('editPanel-' + btn.dataset.toggleEdit).classList.toggle('open');
+      });
+    });
+    listEl.querySelectorAll('[data-cancel-edit]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.getElementById('editPanel-' + btn.dataset.cancelEdit).classList.remove('open');
+      });
+    });
+    listEl.querySelectorAll('[data-reset-pw]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        sendResetPasswordLink(btn.dataset.empEmail);
+      });
+    });
+    listEl.querySelectorAll('[data-save-emp]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        saveEmployeeEdit(btn.dataset.companyId, btn.dataset.saveEmp);
+      });
+    });
   } catch (err) {
     listEl.innerHTML = '<div class="empty-state">تعذر تحميل قائمة الموظفين</div>';
+  }
+}
+
+// ===== حفظ تعديل موظف =====
+async function saveEmployeeEdit(companyId, empId) {
+  const panel = document.getElementById('editPanel-' + empId);
+  const name = panel.querySelector('.edit-name').value.trim();
+  const status = panel.querySelector('.edit-status').value;
+  const annual = parseFloat(panel.querySelector('.edit-annual').value) || 0;
+  const sick = parseFloat(panel.querySelector('.edit-sick').value) || 0;
+  const emergency = parseFloat(panel.querySelector('.edit-emergency').value) || 0;
+  const unpaidUsed = parseFloat(panel.querySelector('.edit-unpaid').value) || 0;
+  const official = parseFloat(panel.querySelector('.edit-official').value) || 0;
+
+  if (!name) { showToast('اسم الموظف لازم يكون موجود', 'error'); return; }
+
+  const btn = panel.querySelector('[data-save-emp]');
+  btn.disabled = true;
+  btn.textContent = 'جاري الحفظ...';
+
+  try {
+    await updateDoc(doc(db, 'companies', companyId, 'employees', empId), {
+      name: name,
+      status: status,
+      balances: { annual, sick, emergency, unpaidUsed, official }
+    });
+    showToast('تم حفظ التعديل', 'success');
+    await loadEmployees(companyId);
+  } catch (err) {
+    showToast('حصل خطأ أثناء الحفظ', 'error');
+    btn.disabled = false;
+    btn.textContent = 'حفظ';
+  }
+}
+
+// ===== إرسال رابط إعادة تعيين الباسورد =====
+async function sendResetPasswordLink(email) {
+  if (!email) {
+    showToast('مفيش إيميل مسجل لصاحب الحساب ده، مينفعش نبعتله رابط', 'error');
+    return;
+  }
+  const sure = confirm('هيتبعت رابط إعادة تعيين الباسورد للإيميل:\n' + email + '\nمتأكد؟');
+  if (!sure) return;
+
+  try {
+    await sendPasswordResetEmail(auth, email);
+    showToast('تم إرسال رابط إعادة تعيين الباسورد', 'success');
+  } catch (err) {
+    showToast('حصل خطأ أثناء إرسال الرابط', 'error');
   }
 }
 
@@ -618,7 +777,11 @@ async function loadAdmins(companyId) {
           <div class="name">${escapeHtml(data.name)}</div>
           <div class="sub">${escapeHtml(data.email || '')}</div>
         </div>
-        <button class="btn-delete" data-admin-id="${docSnap.id}" data-admin-name="${escapeHtml(data.name)}" data-company-id="${companyId}">حذف</button>
+        <div class="item-actions">
+          <button class="btn-small" data-rename-admin-id="${docSnap.id}" data-admin-name="${escapeHtml(data.name)}" data-company-id="${companyId}">✏️ تعديل الاسم</button>
+          <button class="btn-small" data-reset-pw="${docSnap.id}" data-emp-email="${escapeHtml(data.email || '')}">🔑 باسورد</button>
+          <button class="btn-delete" data-admin-id="${docSnap.id}" data-admin-name="${escapeHtml(data.name)}" data-company-id="${companyId}">حذف</button>
+        </div>
       </div>`;
     });
     listEl.innerHTML = html;
@@ -628,8 +791,34 @@ async function loadAdmins(companyId) {
         deleteAdmin(btn.dataset.companyId, btn.dataset.adminId, btn.dataset.adminName);
       });
     });
+    listEl.querySelectorAll('[data-rename-admin-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        renameAdmin(btn.dataset.companyId, btn.dataset.renameAdminId, btn.dataset.adminName);
+      });
+    });
+    listEl.querySelectorAll('[data-reset-pw]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        sendResetPasswordLink(btn.dataset.empEmail);
+      });
+    });
   } catch (err) {
     listEl.innerHTML = '<div class="empty-state">تعذر تحميل قائمة الأدمنية</div>';
+  }
+}
+
+// ===== تعديل اسم أدمن =====
+async function renameAdmin(companyId, adminId, currentName) {
+  const newName = prompt('اكتب الاسم الجديد للأدمن:', currentName);
+  if (newName === null) return;
+  const trimmed = newName.trim();
+  if (!trimmed || trimmed === currentName) return;
+
+  try {
+    await updateDoc(doc(db, 'companies', companyId, 'admins', adminId), { name: trimmed });
+    showToast('تم تعديل الاسم', 'success');
+    await loadAdmins(companyId);
+  } catch (err) {
+    showToast('حصل خطأ أثناء التعديل', 'error');
   }
 }
 
@@ -678,6 +867,18 @@ document.getElementById('branchCompanySelect').addEventListener('change', (e) =>
   loadBranches(e.target.value);
 });
 
+function resetBranchForm() {
+  editingBranchIndex = null;
+  document.getElementById('branchName').value = '';
+  document.getElementById('branchLat').value = '';
+  document.getElementById('branchLng').value = '';
+  document.getElementById('branchRadius').value = '150';
+  document.getElementById('btnAddBranch').textContent = 'إضافة الفرع';
+  document.getElementById('btnCancelBranchEdit').classList.add('hidden');
+}
+
+document.getElementById('btnCancelBranchEdit').addEventListener('click', resetBranchForm);
+
 document.getElementById('btnAddBranch').addEventListener('click', async () => {
   const companyId = document.getElementById('branchCompanySelect').value;
   const name = document.getElementById('branchName').value.trim();
@@ -692,28 +893,33 @@ document.getElementById('btnAddBranch').addEventListener('click', async () => {
 
   const btn = document.getElementById('btnAddBranch');
   btn.disabled = true;
-  btn.textContent = 'جاري الإضافة...';
+  btn.textContent = editingBranchIndex !== null ? 'جاري الحفظ...' : 'جاري الإضافة...';
 
   try {
     const companyRef = doc(db, 'companies', companyId);
     const companySnap = await getDoc(companyRef);
     const currentBranches = (companySnap.exists() && companySnap.data().branches) || [];
-    const updatedBranches = [...currentBranches, { name, lat, lng, radiusMeters }];
+
+    let updatedBranches;
+    if (editingBranchIndex !== null) {
+      updatedBranches = currentBranches.map((b, i) => i === editingBranchIndex ? { name, lat, lng, radiusMeters } : b);
+    } else {
+      updatedBranches = [...currentBranches, { name, lat, lng, radiusMeters }];
+    }
 
     await updateDoc(companyRef, { branches: updatedBranches });
 
-    document.getElementById('branchName').value = '';
-    document.getElementById('branchLat').value = '';
-    document.getElementById('branchLng').value = '';
-    document.getElementById('branchRadius').value = '150';
-    showToast('تمت إضافة الفرع بنجاح', 'success');
+    showToast(editingBranchIndex !== null ? 'تم حفظ تعديل الفرع' : 'تمت إضافة الفرع بنجاح', 'success');
+    resetBranchForm();
     await loadBranches(companyId);
   } catch (err) {
-    showToast('حصل خطأ أثناء إضافة الفرع', 'error');
+    showToast('حصل خطأ، حاول تاني', 'error');
+    btn.disabled = false;
+    btn.textContent = editingBranchIndex !== null ? 'حفظ التعديل' : 'إضافة الفرع';
+    return;
   }
 
   btn.disabled = false;
-  btn.textContent = 'إضافة الفرع';
 });
 
 // ===== عرض فروع شركة معينة =====
@@ -741,7 +947,10 @@ async function loadBranches(companyId) {
           <div class="name">${escapeHtml(b.name)}</div>
           <div class="sub">${b.lat}, ${b.lng} — نطاق ${b.radiusMeters} متر</div>
         </div>
-        <button class="btn-delete" data-branch-index="${index}" data-company-id="${companyId}">حذف</button>
+        <div class="item-actions">
+          <button class="btn-small" data-edit-branch-index="${index}" data-company-id="${companyId}">✏️ تعديل</button>
+          <button class="btn-delete" data-branch-index="${index}" data-company-id="${companyId}">حذف</button>
+        </div>
       </div>`;
     });
     listEl.innerHTML = html;
@@ -751,9 +960,26 @@ async function loadBranches(companyId) {
         deleteBranch(btn.dataset.companyId, parseInt(btn.dataset.branchIndex, 10));
       });
     });
+    listEl.querySelectorAll('[data-edit-branch-index]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        startEditBranch(parseInt(btn.dataset.editBranchIndex, 10), branches[parseInt(btn.dataset.editBranchIndex, 10)]);
+      });
+    });
   } catch (err) {
     listEl.innerHTML = '<div class="empty-state">تعذر تحميل قائمة الفروع</div>';
   }
+}
+
+// ===== بدء تعديل فرع (بيعبي الفورم ببياناته) =====
+function startEditBranch(index, branch) {
+  editingBranchIndex = index;
+  document.getElementById('branchName').value = branch.name;
+  document.getElementById('branchLat').value = branch.lat;
+  document.getElementById('branchLng').value = branch.lng;
+  document.getElementById('branchRadius').value = branch.radiusMeters;
+  document.getElementById('btnAddBranch').textContent = 'حفظ التعديل';
+  document.getElementById('btnCancelBranchEdit').classList.remove('hidden');
+  document.getElementById('branchName').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 // ===== مسح فرع =====
