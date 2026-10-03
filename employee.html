@@ -205,6 +205,9 @@ import {
 
 const DAILY_STANDARD_HOURS = 8;
 const TIMEZONE = 'Africa/Cairo';
+const WORKER_URL = 'https://attendance-notifications.altmsah0110.workers.dev/notify';
+const WORKER_API_KEY = '9CyhHwxH6yC66NxPsCEXhdplqaOUJgMb';
+const typeLabels = { Annual: 'سنوية', Sick: 'مرضية', Emergency: 'طارئة', Unpaid: 'بدون مرتب', Official: 'رسمية' };
 
 let companyId = null;
 let employeeId = null;
@@ -234,6 +237,19 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = String(str == null ? '' : str);
   return div.innerHTML;
+}
+
+// ======================== إشعار تليجرام (best-effort، ما بيوقفش الواجهة لو فشل) ========================
+async function sendTelegramNotification(message) {
+  try {
+    await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Api-Key': WORKER_API_KEY },
+      body: JSON.stringify({ companyId: companyId, message: message })
+    });
+  } catch (err) {
+    console.error('telegram notify error:', err);
+  }
 }
 
 function todayDateStr() {
@@ -475,6 +491,13 @@ document.getElementById('btnClockIn').addEventListener('click', async () => {
     if (loc.withinRange === false) showToast('تنبيه: خارج النطاق', 'error');
     document.getElementById('commentInput').value = '';
     await loadTodayStatus();
+
+    const rangeText = loc.withinRange === true ? 'داخل نطاق ' + loc.branchName
+      : loc.withinRange === false ? 'خارج النطاق (' + loc.distance + 'م من ' + loc.branchName + ')'
+      : 'بدون تحقق موقع';
+    sendTelegramNotification(
+      '🟢 حضور: ' + employeeData.name + '\n🕐 ' + timeStr + '\n📍 ' + rangeText
+    );
   } catch (err) {
     console.error('clockIn error:', err);
     showToast('حصل خطأ، حاول تاني', 'error');
@@ -515,6 +538,11 @@ document.getElementById('btnClockOut').addEventListener('click', async () => {
     showToast('تم تسجيل الانصراف - ' + total.toFixed(2) + ' ساعة', 'success');
     document.getElementById('commentInput').value = '';
     await loadTodayStatus();
+
+    sendTelegramNotification(
+      '🔴 انصراف: ' + employeeData.name + '\n🕐 ' + timeStr + '\n⏱️ ' + total.toFixed(2) + ' ساعة' +
+      (overtime > 0 ? ' (أوفر تايم ' + overtime.toFixed(2) + ')' : '')
+    );
   } catch (err) {
     console.error('clockOut error:', err);
     showToast('حصل خطأ، حاول تاني', 'error');
@@ -570,6 +598,11 @@ document.getElementById('btnSubmitLeave').addEventListener('click', async () => 
     document.getElementById('leaveEnd').value = '';
     document.getElementById('leaveComment').value = '';
     await loadLeaveHistory();
+
+    sendTelegramNotification(
+      '📋 طلب إجازة جديد\n' + employeeData.name + '\nالنوع: ' + (typeLabels[type] || type) +
+      '\nمن ' + start + ' إلى ' + end + ' (' + days + ' يوم)'
+    );
   } catch (err) {
     console.error('submitLeave error:', err);
     showToast('حصل خطأ أثناء الإرسال', 'error');
@@ -592,7 +625,6 @@ async function loadLeaveHistory() {
     const snap = await getDocs(q);
     if (snap.empty) { box.innerHTML = '<div class="empty-state">لا يوجد طلبات سابقة</div>'; return; }
 
-    const typeLabels = { Annual: 'سنوية', Sick: 'مرضية', Emergency: 'طارئة', Unpaid: 'بدون مرتب', Official: 'رسمية' };
     const statusLabels = { Pending: 'في الانتظار', Approved: 'موافَق عليها', Rejected: 'مرفوضة' };
 
     let html = '';
