@@ -206,7 +206,6 @@ import {
 const DAILY_STANDARD_HOURS = 8;
 const TIMEZONE = 'Africa/Cairo';
 const WORKER_URL = 'https://attendance-notifications.altmsah0110.workers.dev/notify';
-const WORKER_API_KEY = '9CyhHwxH6yC66NxPsCEXhdplqaOUJgMb';
 const typeLabels = { Annual: 'سنوية', Sick: 'مرضية', Emergency: 'طارئة', Unpaid: 'بدون مرتب', Official: 'رسمية' };
 
 let companyId = null;
@@ -240,13 +239,20 @@ function escapeHtml(str) {
 }
 
 // ======================== إشعار تليجرام (best-effort، ما بيوقفش الواجهة لو فشل) ========================
-async function sendTelegramNotification(message) {
+// بنبعت نوع الحدث (clockIn / clockOut / leaveRequest) وتفاصيله، والـ Worker هو اللي بيبني الرسالة
+// باسم الموظف ووقت السيرفر، وبيتحقق من هويتنا عن طريق توكن الدخول (Firebase ID Token).
+async function sendTelegramNotification(type, details) {
   try {
-    await fetch(WORKER_URL, {
+    const token = await auth.currentUser.getIdToken();
+    const res = await fetch(WORKER_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Api-Key': WORKER_API_KEY },
-      body: JSON.stringify({ companyId: companyId, message: message })
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ type: type, details: details || '' })
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.error('telegram notify failed:', res.status, data.error);
+    }
   } catch (err) {
     console.error('telegram notify error:', err);
   }
@@ -495,9 +501,7 @@ document.getElementById('btnClockIn').addEventListener('click', async () => {
     const rangeText = loc.withinRange === true ? 'داخل نطاق ' + loc.branchName
       : loc.withinRange === false ? 'خارج النطاق (' + loc.distance + 'م من ' + loc.branchName + ')'
       : 'بدون تحقق موقع';
-    sendTelegramNotification(
-      '🟢 حضور: ' + employeeData.name + '\n🕐 ' + timeStr + '\n📍 ' + rangeText
-    );
+    sendTelegramNotification('clockIn', '📍 ' + rangeText);
   } catch (err) {
     console.error('clockIn error:', err);
     showToast('حصل خطأ، حاول تاني', 'error');
@@ -540,8 +544,8 @@ document.getElementById('btnClockOut').addEventListener('click', async () => {
     await loadTodayStatus();
 
     sendTelegramNotification(
-      '🔴 انصراف: ' + employeeData.name + '\n🕐 ' + timeStr + '\n⏱️ ' + total.toFixed(2) + ' ساعة' +
-      (overtime > 0 ? ' (أوفر تايم ' + overtime.toFixed(2) + ')' : '')
+      'clockOut',
+      '⏱️ ' + total.toFixed(2) + ' ساعة' + (overtime > 0 ? ' (أوفر تايم ' + overtime.toFixed(2) + ')' : '')
     );
   } catch (err) {
     console.error('clockOut error:', err);
@@ -600,8 +604,8 @@ document.getElementById('btnSubmitLeave').addEventListener('click', async () => 
     await loadLeaveHistory();
 
     sendTelegramNotification(
-      '📋 طلب إجازة جديد\n' + employeeData.name + '\nالنوع: ' + (typeLabels[type] || type) +
-      '\nمن ' + start + ' إلى ' + end + ' (' + days + ' يوم)'
+      'leaveRequest',
+      'النوع: ' + (typeLabels[type] || type) + '\nمن ' + start + ' إلى ' + end + ' (' + days + ' يوم)'
     );
   } catch (err) {
     console.error('submitLeave error:', err);
