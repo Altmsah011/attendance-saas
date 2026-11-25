@@ -26,6 +26,7 @@ html, body {
 }
 body { display: flex; flex-direction: column; align-items: center; padding: 20px 16px 40px; }
 .wrap { width: 100%; max-width: 640px; }
+.hidden { display: none !important; }
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -200,6 +201,27 @@ body { display: flex; flex-direction: column; align-items: center; padding: 20px
   </div>
 
   <div class="card">
+    <h2>إعدادات تليجرام للشركة</h2>
+    <div class="hint">كل شركة ليها بوت تليجرام خاص بيها، والإشعارات (حضور، انصراف، طلبات إجازة) بتوصل لمدير الشركة على رقم الشات اللي هتكتبه هنا.</div>
+    <div class="field">
+      <label for="tgCompanySelect">الشركة</label>
+      <select id="tgCompanySelect"></select>
+    </div>
+    <div class="field">
+      <label for="tgBotKey">اسم البوت (إنجليزي صغير، من غير مسافات)</label>
+      <input type="text" id="tgBotKey" placeholder="مثال: xceed" dir="ltr">
+    </div>
+    <div class="hint">لازم يكون في Cloudflare سر (Secret) اسمه <b id="tgSecretName" dir="ltr">BOT_TOKEN_</b> وقيمته توكن البوت من BotFather.</div>
+    <div class="field">
+      <label for="tgChatId">رقم الشات (Chat ID) لمدير الشركة</label>
+      <input type="text" id="tgChatId" placeholder="مثال: 7321301285" dir="ltr">
+    </div>
+    <button class="btn" id="btnSaveTelegram">حفظ إعدادات تليجرام</button>
+    <button class="btn-secondary" id="btnTestTelegram" style="margin-top:10px;">📨 ابعت رسالة تجربة</button>
+    <div class="hint" style="margin-top:0;">رسالة التجربة بتستخدم القيم المحفوظة، فاحفظ الأول وبعدين جرّب. ولازم مدير الشركة يكون فتح البوت وداس Start.</div>
+  </div>
+
+  <div class="card">
     <h2>إضافة موظف</h2>
     <div class="field">
       <label for="empCompanySelect">الشركة</label>
@@ -297,6 +319,8 @@ import {
   doc, setDoc, getDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, query, orderBy, serverTimestamp
 } from './firebase-config.js';
 
+const WORKER_URL = 'https://attendance-notifications.altmsah0110.workers.dev/notify';
+
 let companiesCache = [];
 let editingBranchIndex = null;
 
@@ -317,6 +341,15 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+// بيحط الاختيارات الجديدة في القائمة المنسدلة مع الحفاظ على الشركة اللي كانت مختارة
+function setSelectOptions(selectEl, html) {
+  const prev = selectEl.value;
+  selectEl.innerHTML = html;
+  if (prev && Array.from(selectEl.options).some((o) => o.value === prev)) {
+    selectEl.value = prev;
+  }
 }
 
 // ===== حماية الصفحة: لازم يكون مسجل دخول ودوره superadmin =====
@@ -362,7 +395,8 @@ document.getElementById('btnAddCompany').addEventListener('click', async () => {
       name: name,
       branches: [],
       leaveTypes: ['Annual', 'Sick', 'Emergency', 'Unpaid', 'Official'],
-      telegramBotToken: '',
+      botKey: '',
+      telegramChatId: '',
       createdAt: serverTimestamp()
     });
     nameInput.value = '';
@@ -382,6 +416,7 @@ async function loadCompanies() {
   const selectEl = document.getElementById('empCompanySelect');
   const adminSelectEl = document.getElementById('adminCompanySelect');
   const branchSelectEl = document.getElementById('branchCompanySelect');
+  const tgSelectEl = document.getElementById('tgCompanySelect');
 
   try {
     const q = query(collection(db, 'companies'), orderBy('createdAt', 'desc'));
@@ -397,6 +432,8 @@ async function loadCompanies() {
       selectEl.innerHTML = '<option value="">لا توجد شركات</option>';
       adminSelectEl.innerHTML = '<option value="">لا توجد شركات</option>';
       branchSelectEl.innerHTML = '<option value="">لا توجد شركات</option>';
+      tgSelectEl.innerHTML = '<option value="">لا توجد شركات</option>';
+      fillTelegramForm('');
       document.getElementById('employeesList').innerHTML = '<div class="empty-state">مفيش شركات لسه</div>';
       document.getElementById('adminsList').innerHTML = '<div class="empty-state">مفيش شركات لسه</div>';
       document.getElementById('branchesList').innerHTML = '<div class="empty-state">مفيش شركات لسه</div>';
@@ -409,10 +446,14 @@ async function loadCompanies() {
       const dateStr = c.createdAt && c.createdAt.toDate
         ? c.createdAt.toDate().toLocaleDateString('ar-EG')
         : '—';
+      const tgStatus = (c.botKey && c.telegramChatId)
+        ? '✅ مفعّل (' + escapeHtml(c.botKey) + ')'
+        : '⚠️ غير مفعّل';
       html += `<div class="company-item">
         <div>
           <div class="name">${escapeHtml(c.name)}</div>
           <div class="date">أُضيفت في ${dateStr}</div>
+          <div class="date">تليجرام: ${tgStatus}</div>
           <div class="cid">${c.id}</div>
         </div>
         <div class="item-actions">
@@ -423,9 +464,10 @@ async function loadCompanies() {
       selectHtml += `<option value="${c.id}">${escapeHtml(c.name)}</option>`;
     });
     listEl.innerHTML = html;
-    selectEl.innerHTML = selectHtml;
-    adminSelectEl.innerHTML = selectHtml;
-    branchSelectEl.innerHTML = selectHtml;
+    setSelectOptions(selectEl, selectHtml);
+    setSelectOptions(adminSelectEl, selectHtml);
+    setSelectOptions(branchSelectEl, selectHtml);
+    setSelectOptions(tgSelectEl, selectHtml);
 
     listEl.querySelectorAll('.btn-delete').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -438,6 +480,7 @@ async function loadCompanies() {
       });
     });
 
+    fillTelegramForm(tgSelectEl.value);
     await loadEmployees(selectEl.value);
     await loadAdmins(adminSelectEl.value);
     await loadBranches(branchSelectEl.value);
@@ -485,6 +528,96 @@ async function renameCompany(companyId, currentName) {
     showToast('حصل خطأ أثناء التعديل', 'error');
   }
 }
+
+// ===== إعدادات تليجرام للشركة =====
+function updateSecretNamePreview() {
+  const key = document.getElementById('tgBotKey').value.trim().toUpperCase();
+  document.getElementById('tgSecretName').textContent = 'BOT_TOKEN_' + key;
+}
+
+function fillTelegramForm(companyId) {
+  const company = companiesCache.find((c) => c.id === companyId);
+  document.getElementById('tgBotKey').value = (company && company.botKey) || '';
+  document.getElementById('tgChatId').value = (company && company.telegramChatId) || '';
+  updateSecretNamePreview();
+}
+
+document.getElementById('tgCompanySelect').addEventListener('change', (e) => {
+  fillTelegramForm(e.target.value);
+});
+document.getElementById('tgBotKey').addEventListener('input', updateSecretNamePreview);
+
+document.getElementById('btnSaveTelegram').addEventListener('click', async () => {
+  const companyId = document.getElementById('tgCompanySelect').value;
+  const botKey = document.getElementById('tgBotKey').value.trim().toLowerCase();
+  const chatId = document.getElementById('tgChatId').value.trim();
+
+  if (!companyId) { showToast('اختار شركة الأول', 'error'); return; }
+  if (!/^[a-z0-9_]{2,30}$/.test(botKey)) {
+    showToast('اسم البوت لازم يكون إنجليزي صغير وأرقام و _ فقط (من 2 لـ 30 حرف)', 'error');
+    return;
+  }
+  if (!/^-?\d{5,20}$/.test(chatId)) {
+    showToast('رقم الشات لازم يكون أرقام فقط', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btnSaveTelegram');
+  btn.disabled = true;
+  btn.textContent = 'جاري الحفظ...';
+
+  try {
+    await updateDoc(doc(db, 'companies', companyId), { botKey: botKey, telegramChatId: chatId });
+    showToast('تم حفظ إعدادات تليجرام', 'success');
+    await loadCompanies();
+  } catch (err) {
+    showToast('حصل خطأ أثناء الحفظ', 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'حفظ إعدادات تليجرام';
+});
+
+// بيحول رسائل الخطأ اللي بترجع من الـ Worker لرسائل مفهومة
+function friendlyWorkerError(errorText, status) {
+  const text = String(errorText || '');
+  if (text.startsWith('botKey is not set')) return 'اسم البوت مش متسجل للشركة دي، احفظه الأول';
+  if (text.startsWith('telegramChatId is not set')) return 'رقم الشات مش متسجل للشركة دي، احفظه الأول';
+  const secretMatch = text.match(/Secret (\S+) is not configured/);
+  if (secretMatch) return 'لازم تضيف السر ' + secretMatch[1] + ' في Cloudflare (توكن البوت)';
+  if (text.startsWith('Telegram:')) return 'تليجرام رفض الرسالة: ' + text.replace('Telegram:', '').trim() + ' — اتأكد من رقم الشات وإن المدير داس Start على البوت';
+  if (status === 401) return 'انتهت الجلسة، سجل دخول من جديد';
+  return text ? 'خطأ من الـ Worker: ' + text : 'تعذر إرسال الرسالة (' + status + ')';
+}
+
+document.getElementById('btnTestTelegram').addEventListener('click', async () => {
+  const companyId = document.getElementById('tgCompanySelect').value;
+  if (!companyId) { showToast('اختار شركة الأول', 'error'); return; }
+
+  const btn = document.getElementById('btnTestTelegram');
+  btn.disabled = true;
+  btn.textContent = 'جاري الإرسال...';
+
+  try {
+    const token = await auth.currentUser.getIdToken();
+    const res = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ type: 'test', companyId: companyId })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) {
+      showToast('تم إرسال رسالة التجربة، شوف تليجرام', 'success');
+    } else {
+      showToast(friendlyWorkerError(data.error, res.status), 'error');
+    }
+  } catch (err) {
+    showToast('تعذر الوصول للـ Worker، اتأكد من الإنترنت', 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '📨 ابعت رسالة تجربة';
+});
 
 document.getElementById('empCompanySelect').addEventListener('change', (e) => {
   loadEmployees(e.target.value);
