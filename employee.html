@@ -232,6 +232,14 @@ function showGate(text) {
   document.getElementById('mainApp').style.display = 'none';
 }
 
+// رسالة مناسبة لو قواعد الأمان رفضت العملية (حساب موقوف أو ساعة الجهاز غير مضبوطة)
+function failMessage(err, fallback) {
+  if (err && err.code === 'permission-denied') {
+    return 'تم رفض العملية: حسابك موقوف أو ساعة جهازك غير مضبوطة (فعّل الوقت التلقائي)';
+  }
+  return fallback;
+}
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = String(str == null ? '' : str);
@@ -327,6 +335,11 @@ onAuthStateChanged(auth, async (user) => {
 
     companyData = companySnap.data();
     employeeData = employeeSnap.data();
+
+    if (employeeData.status !== 'Active') {
+      showGate('حسابك موقوف حالياً، كلم مدير الشركة');
+      return;
+    }
 
     document.getElementById('companyTitle').textContent = companyData.name || '—';
     document.getElementById('empName').textContent = employeeData.name || '—';
@@ -504,7 +517,7 @@ document.getElementById('btnClockIn').addEventListener('click', async () => {
     sendTelegramNotification('clockIn', '📍 ' + rangeText);
   } catch (err) {
     console.error('clockIn error:', err);
-    showToast('حصل خطأ، حاول تاني', 'error');
+    showToast(failMessage(err, 'حصل خطأ، حاول تاني'), 'error');
   }
 
   btn.innerHTML = 'تسجيل حضور';
@@ -549,7 +562,7 @@ document.getElementById('btnClockOut').addEventListener('click', async () => {
     );
   } catch (err) {
     console.error('clockOut error:', err);
-    showToast('حصل خطأ، حاول تاني', 'error');
+    showToast(failMessage(err, 'حصل خطأ، حاول تاني'), 'error');
   }
 
   btn.innerHTML = 'تسجيل انصراف';
@@ -609,7 +622,7 @@ document.getElementById('btnSubmitLeave').addEventListener('click', async () => 
     );
   } catch (err) {
     console.error('submitLeave error:', err);
-    showToast('حصل خطأ أثناء الإرسال', 'error');
+    showToast(failMessage(err, 'حصل خطأ أثناء الإرسال'), 'error');
   }
 
   btn.disabled = false;
